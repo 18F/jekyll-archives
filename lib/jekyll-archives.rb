@@ -1,4 +1,6 @@
 require 'jekyll'
+require 'pry'
+require 'rb-readline'
 
 module Jekyll
   module Archives
@@ -30,6 +32,7 @@ module Jekyll
       end
 
       def generate(site)
+        # binding.pry
         @site = site
         @posts = site.posts
         @archives = []
@@ -84,14 +87,6 @@ module Jekyll
         end
       end
 
-      # Renders the archives into the layouts
-      def render
-        payload = @site.site_payload
-        @archives.each do |archive|
-          archive.render(@site.layouts, payload)
-        end
-      end
-
       # Write archives to their destination
       def write
         @archives.each do |archive|
@@ -100,8 +95,53 @@ module Jekyll
         end
       end
 
+      def clean_tags(tags)
+        cleaned_tags = []
+        tags.each do |tag|
+          cleaned_tags << tag.gsub(/[^0-9A-Za-z]/, ' ').squeeze
+        end
+        cleaned_tags
+      end
+
+      def clean_tag(tag)
+        tag.gsub(/[^0-9A-Za-z]/, ' ').squeeze
+      end
+
       def tags
-        @site.post_attr_hash('tags')
+        # binding.pry
+        # @site.post_attr_hash('tags')
+
+        # def post_attr_hash(post_attr)
+        #   # Build a hash map based on the specified post attribute ( post attr =>
+        #   # array of posts ) then sort each array in reverse order.
+        #   hash = Hash.new { |h, key| h[key] = [] }
+        #   posts.docs.each do |p|
+        #       p.data[post_attr].each { |t| hash[t] << p } if p.data[post_attr]
+        #     end
+        #     hash.values.each { |posts| posts.sort!.reverse! }
+        #     hash
+        # end
+
+        hash = Hash.new { |h, key| h[key] = [] }
+
+        # In Jekyll 3, Collection#each should be called on the #docs array directly.
+        if Jekyll::VERSION >= '3.0.0'
+          @posts.docs.each do |p|
+            p.data['tags'] ||= []
+            p.data['tags'] = clean_tags(p.data['tags'])
+            # binding.pry
+            p.data['tags'].each { |t| hash[t] << p } if p.data['tags']
+            # hash['tags'] << p
+            # binding.pry
+
+            # hash[p.date.strftime("%Y")] << p
+          end
+        else
+          # @posts.each { |p| hash[p.date.strftime("%Y")] << p }
+        end
+        hash.values.each { |posts| posts.sort!.reverse! }
+        hash
+        # binding.pry
       end
 
       def categories
@@ -113,7 +153,7 @@ module Jekyll
         hash = Hash.new { |h, key| h[key] = [] }
 
         # In Jekyll 3, Collection#each should be called on the #docs array directly.
-        if Jekyll::VERSION >= '3.0.0' 
+        if Jekyll::VERSION >= '3.0.0'
           @posts.docs.each { |p| hash[p.date.strftime("%Y")] << p }
         else
           @posts.each { |p| hash[p.date.strftime("%Y")] << p }

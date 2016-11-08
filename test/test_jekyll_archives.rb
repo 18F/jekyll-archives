@@ -1,200 +1,164 @@
-require 'helper'
+require 'jekyll'
 
-class TestJekyllArchives < Minitest::Test
-  context "the jekyll-archives plugin" do
-    setup do
-      @site = fixture_site({
-        "jekyll-archives" => {
-          "enabled" => true
+module Jekyll
+  module Archives
+    # Internal requires
+    autoload :Archive, 'jekyll-archives/archive'
+    autoload :VERSION, 'jekyll-archives/version'
+
+    class Archives < Jekyll::Generator
+      safe true
+
+      DEFAULTS = {
+        'layout' => 'archive',
+        'enabled' => [],
+        'permalinks' => {
+          'year' => '/:year/',
+          'month' => '/:year/:month/',
+          'day' => '/:year/:month/:day/',
+          'tag' => '/tag/:name/',
+          'category' => '/category/:name/'
         }
-      })
-      @site.read
-      @archives = Jekyll::Archives::Archives.new(@site.config)
-    end
+      }
 
-    should "generate archive pages by year" do
-      @archives.generate(@site)
-      assert archive_exists? @site, "2014/index.html"
-      assert archive_exists? @site, "2013/index.html"
-    end
+      def initialize(config = nil)
+        if config['jekyll-archives'].nil?
+          @config = DEFAULTS
+        else
+          @config = Utils.deep_merge_hashes(DEFAULTS, config['jekyll-archives'])
+        end
+      end
 
-    should "generate archive pages by month" do
-      @archives.generate(@site)
-      assert archive_exists? @site, "2014/08/index.html"
-      assert archive_exists? @site, "2014/03/index.html"
-    end
+      def generate(site)
+        @site = site
+        @posts = site.posts
+        @archives = []
 
-    should "generate archive pages by day" do
-      @archives.generate(@site)
-      assert archive_exists? @site, "2014/08/17/index.html"
-      assert archive_exists? @site, "2013/08/16/index.html"
-    end
+        @site.config['jekyll-archives'] = @config
 
-    should "generate archive pages by tag" do
-      @archives.generate(@site)
-      assert archive_exists? @site, "tag/test-tag/index.html"
-      assert archive_exists? @site, "tag/tagged/index.html"
-      assert archive_exists? @site, "tag/new/index.html"
-    end
+        read
+        @site.pages.concat(@archives)
 
-    should "generate archive pages by category" do
-      @archives.generate(@site)
-      assert archive_exists? @site, "category/plugins/index.html"
-    end
+        @site.config["archives"] = @archives
+      end
 
-    should "generate archive pages with a layout" do
-      @site.process
-      assert_equal "Test", read_file("tag/test-tag/index.html")
-    end
-  end
+      # Read archive data from posts
+      def read
+        read_tags
+        read_categories
+        read_dates
+      end
 
-  context "the jekyll-archives plugin with custom layout path" do
-    setup do
-      @site = fixture_site({
-        "jekyll-archives" => {
-          "layout" => "archive-too",
-          "enabled" => true
-        }
-      })
-      @site.process
-    end
+      def read_tags
+        if enabled? "tags"
+          tags.each do |title, posts|
+            @archives << Archive.new(@site, title, "tag", posts)
+          end
+        end
+      end
 
-    should "use custom layout" do
-      @site.process
-      assert_equal "Test too", read_file("tag/test-tag/index.html")
-    end
-  end
+      def read_categories
+        if enabled? "categories"
+          categories.each do |title, posts|
+            @archives << Archive.new(@site, title, "category", posts)
+          end
+        end
+      end
 
-  context "the jekyll-archives plugin with type-specific layout" do
-    setup do
-      @site = fixture_site({
-        "jekyll-archives" => {
-          "enabled" => true,
-          "layouts" => {
-            "year" => "archive-too"
-          }
-        }
-      })
-      @site.process
-    end
+      def read_dates
+        years.each do |year, posts|
+          @archives << Archive.new(@site, { :year => year }, "year", posts) if enabled? "year"
+          months(posts).each do |month, posts|
+            @archives << Archive.new(@site, { :year => year, :month => month }, "month", posts) if enabled? "month"
+            days(posts).each do |day, posts|
+              @archives << Archive.new(@site, { :year => year, :month => month, :day => day }, "day", posts) if enabled? "day"
+            end
+          end
+        end
+      end
 
-    should "use custom layout for specific type only" do
-      assert_equal "Test too", read_file("/2014/index.html")
-      assert_equal "Test too", read_file("/2013/index.html")
-      assert_equal "Test", read_file("/tag/test-tag/index.html")
-    end
-  end
+      # Checks if archive type is enabled in config
+      def enabled?(archive)
+        @config["enabled"] == true || @config["enabled"] == "all" || if @config["enabled"].is_a? Array
+          @config["enabled"].include? archive
+        end
+      end
 
-  context "the jekyll-archives plugin with custom permalinks" do
-    setup do
-      @site = fixture_site({
-        "jekyll-archives" => {
-          "enabled" => true,
-          "permalinks" => {
-            "year" => "/year/:year/",
-            "tag" => "/tag-:name.html",
-            "category" => "/category-:name.html"
-          }
-        }
-      })
-      @site.process
-    end
+      # Write archives to their destination
+      def write
+        @archives.each do |archive|
+          archive.write(@site.dest) if archive.regenerate?
+          archive.add_dependencies
+        end
+      end
 
-    should "use the right permalink" do
-      assert archive_exists? @site, "year/2014/index.html"
-      assert archive_exists? @site, "year/2013/index.html"
-      assert archive_exists? @site, "tag-test-tag.html"
-      assert archive_exists? @site, "tag-new.html"
-      assert archive_exists? @site, "category-plugins.html"
-    end
-  end
+      # Helper method for tags
+      # Receives an array of strings
+      # Returns an array of strings without dashes
+      def remove_dashes(tags)
+        cleaned_tags = []
+        tags.each do |tag|
+          cleaned_tags << tag.gsub(/-/, ' ').squeeze
+        end
+        cleaned_tags
+      end
 
-  context "the archives" do
-    setup do
-      @site = fixture_site({
-        "jekyll-archives" => {
-          "enabled" => true
-        }
-      })
-      @site.process
-    end
+      # Helper method for tags
+      # Receives a post, and an external hash
+      # Assigns posts associated with particular tags to the provided hash.
+      def post_attr_tags(post, hash)
+        post.data['tags'] ||= []
+        post.data['tags'] = remove_dashes(post.data['tags'])
+        post.data['tags'].each { |t| hash[t] << post } if post.data['tags']
+      end
 
-    should "populate the {{ site.archives }} tag in Liquid" do
-      assert_equal 12, read_file("length.html").to_i
-    end
-  end
+      # Custom `post_attr_hash` method for tags
+      def tags
+        hash = Hash.new { |h, key| h[key] = [] }
 
-  context "the jekyll-archives plugin with default config" do
-    setup do
-      @site = fixture_site
-      @site.process
-    end
+        # In Jekyll 3, Collection#each should be called on the #docs array directly.
+        if Jekyll::VERSION >= '3.0.0'
+          @posts.docs.each do |p|
+            post_attr_tags(p, hash)
+          end
+        else
+          @posts.each { |p| post_attr_tags(p, hash) }
+        end
+        hash.values.each { |posts| posts.sort!.reverse! }
+        hash
+      end
 
-    should "not generate any archives" do
-      assert_equal 0, read_file("length.html").to_i
-    end
-  end
+      def categories
+        @site.post_attr_hash('categories')
+      end
 
-  context "the jekyll-archives plugin with enabled array" do
-    setup do
-      @site = fixture_site({
-        "jekyll-archives" => {
-          "enabled" => ["tags"]
-        }
-      })
-      @site.process
-    end
+      # Custom `post_attr_hash` method for years
+      def years
+        hash = Hash.new { |h, key| h[key] = [] }
 
-    should "generate the enabled archives" do
-      assert archive_exists? @site, "tag/test-tag/index.html"
-      assert archive_exists? @site, "tag/tagged/index.html"
-      assert archive_exists? @site, "tag/new/index.html"
-    end
+        # In Jekyll 3, Collection#each should be called on the #docs array directly.
+        if Jekyll::VERSION >= '3.0.0'
+          @posts.docs.each { |p| hash[p.date.strftime("%Y")] << p }
+        else
+          @posts.each { |p| hash[p.date.strftime("%Y")] << p }
+        end
+        hash.values.each { |posts| posts.sort!.reverse! }
+        hash
+      end
 
-    should "not generate the disabled archives" do
-      assert !archive_exists?(@site, "2014/index.html")
-      assert !archive_exists?(@site, "2014/08/index.html")
-      assert !archive_exists?(@site, "2013/08/16/index.html")
-      assert !archive_exists?(@site, "category/plugins/index.html")
-    end
-  end
+      def months(year_posts)
+        hash = Hash.new { |h, key| h[key] = [] }
+        year_posts.each { |p| hash[p.date.strftime("%m")] << p }
+        hash.values.each { |posts| posts.sort!.reverse! }
+        hash
+      end
 
-  context "the jekyll-archives plugin" do
-    setup do
-      @site = fixture_site({
-        "jekyll-archives" => {
-          "enabled" => true
-        }
-      })
-      @site.process
-      @archives = @site.config["archives"]
-      @tag_archive = @archives.detect {|a| a.type == "tag"}
-      @category_archive = @archives.detect {|a| a.type == "category"}
-      @year_archive = @archives.detect {|a| a.type == "year"}
-      @month_archive = @archives.detect {|a| a.type == "month"}
-      @day_archive = @archives.detect {|a| a.type == "day"}
-    end
-
-    should "populate the title field in case of category or tag" do
-      assert @tag_archive.title.is_a? String
-      assert @category_archive.title.is_a? String
-    end
-
-    should "use nil for the title field in case of dates" do
-      assert @year_archive.title.nil?
-      assert @month_archive.title.nil?
-      assert @day_archive.title.nil?
-    end
-
-    should "use nil for the date field in case of category or tag" do
-      assert @tag_archive.date.nil?
-      assert @category_archive.date.nil?
-    end
-
-    should "populate the date field with a Date in case of dates" do
-      assert @year_archive.date.is_a? Date
-      assert @month_archive.date.is_a? Date
-      assert @day_archive.date.is_a? Date
+      def days(month_posts)
+        hash = Hash.new { |h, key| h[key] = [] }
+        month_posts.each { |p| hash[p.date.strftime("%d")] << p }
+        hash.values.each { |posts| posts.sort!.reverse! }
+        hash
+      end
     end
   end
 end
