@@ -1,4 +1,6 @@
 require 'jekyll'
+require 'pry'
+require 'rb-readline'
 
 module Jekyll
   module Archives
@@ -125,6 +127,7 @@ module Jekyll
           @posts.each { |p| post_attr_tags(p, hash) }
         end
         hash.values.each { |posts| posts.sort!.reverse! }
+        binding.pry
         hash
       end
 

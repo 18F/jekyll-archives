@@ -9,3 +9,5 @@ end
 
 # Support for Ruby < 2.2.2 & activesupport
 gem "activesupport", "~> 4.2" if RUBY_VERSION < '2.2.2'
+gem 'pry'
+gem 'rb-readline'
