@@ -101,6 +101,9 @@ module Jekyll
       def remove_dashes(tags)
         cleaned_tags = []
         tags.each do |tag|
+          if (tag == 'presidential innovation fellows')
+            binding.pry
+          end
           cleaned_tags << tag.gsub(/-/, ' ').squeeze
         end
         cleaned_tags
@@ -116,25 +119,25 @@ module Jekyll
       end
 
       # Custom `post_attr_hash` method for tags
-      # def tags
-      #   hash = Hash.new { |h, key| h[key] = [] }
-
-      #   # In Jekyll 3, Collection#each should be called on the #docs array directly.
-      #   if Jekyll::VERSION >= '3.0.0'
-      #     @posts.docs.each do |p|
-      #       post_attr_tags(p, hash)
-      #     end
-      #   else
-      #     @posts.each { |p| post_attr_tags(p, hash) }
-      #   end
-      #   hash.values.each { |posts| posts.sort!.reverse! }
-      #   binding.pry
-      #   hash
-      # end
-
       def tags
-        @site.post_attr_hash('tags')
+        hash = Hash.new { |h, key| h[key] = [] }
+
+        # In Jekyll 3, Collection#each should be called on the #docs array directly.
+        if Jekyll::VERSION >= '3.0.0'
+          @posts.docs.each do |p|
+            post_attr_tags(p, hash)
+          end
+        else
+          @posts.each { |p| post_attr_tags(p, hash) }
+        end
+        hash.values.each { |posts| posts.sort!.reverse! }
+        # binding.pry
+        hash
       end
+
+      # def tags
+      #   @site.post_attr_hash('tags')
+      # end
 
       def categories
         @site.post_attr_hash('categories')
