@@ -55,6 +55,7 @@ module Jekyll
       # Read archive data from posts
       def read
         read_tags
+        binding.pry
         read_categories
         read_dates
       end
@@ -115,20 +116,24 @@ module Jekyll
       end
 
       # Custom `post_attr_hash` method for tags
-      def tags
-        hash = Hash.new { |h, key| h[key] = [] }
+      # def tags
+      #   hash = Hash.new { |h, key| h[key] = [] }
 
-        # In Jekyll 3, Collection#each should be called on the #docs array directly.
-        if Jekyll::VERSION >= '3.0.0'
-          @posts.docs.each do |p|
-            post_attr_tags(p, hash)
-          end
-        else
-          @posts.each { |p| post_attr_tags(p, hash) }
-        end
-        hash.values.each { |posts| posts.sort!.reverse! }
-        binding.pry
-        hash
+      #   # In Jekyll 3, Collection#each should be called on the #docs array directly.
+      #   if Jekyll::VERSION >= '3.0.0'
+      #     @posts.docs.each do |p|
+      #       post_attr_tags(p, hash)
+      #     end
+      #   else
+      #     @posts.each { |p| post_attr_tags(p, hash) }
+      #   end
+      #   hash.values.each { |posts| posts.sort!.reverse! }
+      #   binding.pry
+      #   hash
+      # end
+
+      def tags
+        @site.post_attr_hash('tags')
       end
 
       def categories
