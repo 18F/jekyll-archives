@@ -55,7 +55,6 @@ module Jekyll
       # Read archive data from posts
       def read
         read_tags
-        binding.pry
         read_categories
         read_dates
       end
@@ -101,10 +100,7 @@ module Jekyll
       def remove_dashes(tags)
         cleaned_tags = []
         tags.each do |tag|
-          if (tag == 'presidential innovation fellows')
-            binding.pry
-          end
-          cleaned_tags << tag.gsub(/-/, ' ').squeeze
+          cleaned_tags << tag.gsub(/-/, ' ')
         end
         cleaned_tags
       end
@@ -131,13 +127,9 @@ module Jekyll
           @posts.each { |p| post_attr_tags(p, hash) }
         end
         hash.values.each { |posts| posts.sort!.reverse! }
-        # binding.pry
+        binding.pry
         hash
       end
-
-      # def tags
-      #   @site.post_attr_hash('tags')
-      # end
 
       def categories
         @site.post_attr_hash('categories')
